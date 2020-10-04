@@ -30,11 +30,10 @@ As it's in in the effects-folder of the project it will be loaded with the proje
 
 some screenshots showing preferences and parameters and stuff
 
-![Osc Screen](Osc Screen.jpg)  
-![Preferences OSC](Preferences OSC.jpg)  
-![Preferences OSC](Preferences OSC.jpg)  
-![1 Preferences Volume Fader Range](1 Preferences Volume Fader Range.jpg)  
-![2 Preferences MuteSetting](2 Preferences MuteSetting.jpg)  
+![Osc Screen](O.jpg)  
+![Preferences OSC](P.jpg)  
+![1 Preferences Volume Fader Range](1.jpg)  
+![2 Preferences MuteSetting](2.jpg)  
 
 
 
