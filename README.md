@@ -1,7 +1,7 @@
 # AkaiMidiMixDubVersion
 
-Get the package from goldenarpharazon posted here https://forum.cockos.com/showpost.php?p=1638321&postcount=1  
-Full thread https://forum.cockos.com/showthread.php?t=172908  
+Get the package from goldenarpharazon posted here <https://forum.cockos.com/showpost.php?p=1638321&postcount=1>  
+Full thread <https://forum.cockos.com/showthread.php?t=172908>  
 The Package has info how to install and set it up  
 Read the thread to get more infos if your in trouble  
 
