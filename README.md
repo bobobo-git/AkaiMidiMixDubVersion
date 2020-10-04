@@ -23,7 +23,7 @@ i prefer the non soft-take-over for the dub-thing, so i don't have to wiggle kno
 Unfortunately i'm too blind (or too lazy)to get the faders react without softtakeover.  
 But starting the project with REAPER's faders (a little bit) above zero and on the MidiMix the faders down and all knobs turned off (all to the left) down (or nearly down) is a good starting point.  
 
-I made a JSFX (a variation of the 8 channel stereo Mixer from iX) to control the sends to the three effect tracks via the MidiMix.  
+I made a JSFX (a variation of the 8 channel stereo Mixer from iX) to control the sends to the three effect tracks via the MidiMix. Sends are pre fader  
 As it's in in the effects-folder of the project it will be loaded with the project  
 
 [The Projects as Zip-File](20201003_DubSessionDeDeRe.zip) contains effects and audiodata (right click save as) 
