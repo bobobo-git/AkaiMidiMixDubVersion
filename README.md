@@ -26,7 +26,7 @@ But starting the project with faders (a little bit above zero) in REAPER and on 
 I made a JSFX (a variation of the 8 channel stereo Mixer from iX) to control the sends to the three effect tracks via the MidiMix.  
 As it's in in the effects-folder of the project it will be loaded with the project  
 
-[The Projects as Zip-File](20201003_DubSessionDeDeRe.zip) contains effects and audiodata  
+[The Projects as Zip-File](20201003_DubSessionDeDeRe.zip) contains effects and audiodata (right click save as) 
 
 some screenshots showing preferences and parameters and stuff
 
