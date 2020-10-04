@@ -1,0 +1,71 @@
+/*******************************************************************************
+version: 1.0
+desc: Mixer_1 St to 4 St out D D R 
+author: IX
+provides: . > ../../Mixer_8xS-1xS
+about:
+  # Mixer 8xS - 1xS
+  Mix stereo input pairs 1+2 through 7+8 into outputs 1+2.
+  
+  http://wiki.cockos.com/wiki/index.php/Jesusonic_Effects_Documentation#Mixer_8xS-1xS
+********************************************************************************
+* Copyright 2007-2011 Philip S. Considine
+* License: GPL - http://www.gnu.org/licenses/gpl.html
+*******************************************************************************/
+;
+; This Version takes the Stereo Input and routes it to 4 Stereo output
+; With those sliders the output is accessed levelwise
+; route the outputs 3+4 5+6 7+8 to Tracks with Effects
+; manipulate the sliders with an external controller
+; like AkaiMidiMix (OSC bound)
+; you need an extra MidiMixControlAllKnobs.txt that set the lower knobs to react like the upper two rows
+desc:8x Stereo to 1x Stereo Mixer
+desc:8x Stereo to 1x Stereo Mixer [IXix]
+desc:1x Stereo to 4x Stereo Mixer [bobobo]
+//tags: mixer gain
+//author: IXix
+
+slider1:0<-60,30,0.1>Level 1+2 (dB) M
+slider2:0<-60,0,0.1>Level 3+4 (dB) D1
+slider3:0<-60,0,0.1>Level 5+6 (dB) D2
+slider4:0<-60,0,0.1>Level 7+8 (dB) R
+
+in_pin:input 1 L
+in_pin:input 1 R
+out_pin:output L1 M
+out_pin:output R1 M
+out_pin:output L2 D1
+out_pin:output R2 D1
+out_pin:output L3 D2
+out_pin:output R3 D2
+out_pin:output L4 R
+out_pin:output R4 R
+///////////////////////////////////////////////////////////////////////////////
+@init
+gainMin = -60;
+gainMax = 30;
+
+///////////////////////////////////////////////////////////////////////////////
+@slider
+slider1 = min(max(slider1, gainMin), gainMax);
+slider2 = min(max(slider2, gainMin), gainMax);
+slider3 = min(max(slider3, gainMin), gainMax);
+slider4 = min(max(slider4, gainMin), gainMax);
+
+levelA = 2 ^ (slider1 / 6);
+levelB = 2 ^ (slider2 / 6);
+levelC = 2 ^ (slider3 / 6);
+levelD = 2 ^ (slider4 / 6);
+
+
+///////////////////////////////////////////////////////////////////////////////
+@sample
+spl0 =  (spl0 * levelA);
+spl1 =  (spl1 * levelA);
+spl2 =  (spl0 * levelB);
+spl3 =  (spl1 * levelB);
+spl4 =  (spl0 * levelC);
+spl5 =  (spl1 * levelC);
+spl6 =  (spl0 * levelD);
+spl7 =  (spl1 * levelD);
+
