@@ -12,9 +12,9 @@ There are several possibilites to accompish this.
 You can start oscii-bot.exe with the location of the config file as parameter.  
 Or you can put the configfile where the original MidiMixControl.txt is located and delete the MidiMixControl.txt afterwards (or rename it extension-wise or zip and delete it)  
 
-For better performance you should tune the reaper's preferences.  
-1. Set the columeFaderRange to +0 dB  (so the fader of the MidiMix can't overdo it)
-2. Disable the setting 'Do not process mutued tracks' (as the MidiMix can mute tracks you prevent this setup from knacks)
+For better performance you should tune the reaper's preferences. (i made pictures down here)  
+1. Set the VolumeFaderRange to +0 dB  (so the fader of the MidiMix can't overdo it) 
+2. Disable the setting 'Do not process mutued tracks' (as the MidiMix can mute tracks you prevent this setup from cracks)  
 
 I made two REAPER Projects.  
 One with Soft-takeover and one without soft-takeover  
