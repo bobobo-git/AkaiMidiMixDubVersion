@@ -1,0 +1,818 @@
+// MidiMixControl.txt  V1.01b1 - Carnelian
+//
+// Script for Akai MIDIMIX to act as a control surface for Reaper 5 using OSCII-bot v0.3 through V0.6
+// The script is implemented for the Akai MIDIMIX's default Midi setup (see below) 
+// It has only been tested by the author with the default Reaper themes and layouts
+// Note that Reaper's mixer shows the MIDIMIX master slider in the correct place if one selects "Master Track" + "Show on right side of mixer"
+// This EEL2 (OSCII-bot script) code aligns its columns to read properly when displayed with 4 space characters per tab e.g. in Notepad++
+
+// This script would not have been possible without the work of "Banned" on the Peavey StudioMix controller and the help freely 
+// offered by Banned to others about Reaper's OSC capabilities on the Reaper forum. Thanks also to Erriez for hints on FX GUI behaviour.
+
+// Successful integration of a hardware control surface and a DAW means that each must follow the desired state in step with one another. 
+// In Reaper's implementation, using OSCII-bot, the state is spread across three places between Reaper, the OSCII-bot script run time 
+// system, and the controller presenting some design challenges. 
+
+// Wherever possible the state is maintained in Reaper: it is the DAW that is actually processing sound and such a design approach keeps 
+// the Reaper screen user interface and the controller better in step for an easier user experience. 
+
+// The MIDIMIX itself is virtually stateless in its operation with the exception of the following:- 
+
+// 1) The MIDIMIX maintains the state of its buttons' LEDS which toggle on and off and only change in response to an incoming Midi message. 
+
+// 2) The MIDIMIX registers that a button is depressed for a duration since it sends a Midi "Note on" when depressed and a "Note off" when 
+// released. The button can be held down for a while with a resulting delay between "Note on" and "Note off". This also means that in 
+// conjunction with an OSCII-bot script and a timer, then the time delay of a button could be used as a command modifier i.e short press 
+// means do X : long press means do Y 
+
+// 3) The slider and knob positions represent state. Since there is no feedback possible to a simple controller such as the MIDIMIX (i.e no
+// motorised faders) it means that the MIDIMIX will always "tell" the DAW what values should be in a Midi CC message. This presents some modest
+// usability challenges when a bank changes when the knobs are re-allocated to the next mixer bank: a step change is then unavoidable when a 
+// knob is moved for the first time. However as of v1.00 of this script, Reaper's soft action feature is used for the volume sliders and pans 
+// improving the usability where Reaper temporarily overrides the MIDIMIX state. The knobs' assignment in Reaper can be "learned" with soft 
+// takeover too.
+
+// Default Akai MIDIMIX settings send Midi as follows
+// ------------------------------------------------------
+// Knobs and Faders 1-4               = CC 10 through 1F
+// Knobs and Faders 5-8               = CC 2E through 3D
+// Master Fader                       = CC 3F
+// Buttons (Mute/Shifted Mute=Solo/RecArm) = Note 01 through 18
+// Bank Left                          = Note 19
+// Bank Right                         = Note 1A
+// Solo                               = Note 1B
+// Send All                           = sends 33 CC messages, one for each of the 32 knobs & the master: 
+//                                      if it is pressed aligns Reaper with the knobs/slider position
+
+@input in MIDI "Mix" 			       	           	   // Input to script from MIDIMIX
+@input OSC_IN OSC "localhost:9000"                  // Input to script from OSC
+@output OSC_to_REAPER OSC "192.168.178.60:8000" 0 0  // network address/port for MIDIMIX output from script to Reaper
+                                                       // This IP address will be specific and need changing to your DAW  
+@output out MIDI "Mix"                         	  // Output to MIDIMIX from script
+// @input in MIDI "Yoke:  1" 			          // Test input to script from MidiYoke
+// @output out MIDI "MIDI Out"                     // Test output to simulate MIDIMIX from script
+
+@init
+
+// OSC output messages
+// These OSC messages should match the patterns used in the .ReaperOSC configuration file used in REAPER:
+ 
+device_track_decrement          = "t/device/track/-";                    // DEVICE_PREV_TRACK
+device_track_increment          = "t/device/track/+";                    // DEVICE_NEXT_TRACK
+device_track_select             = "i/device/track/select";           	 // DEVICE_TRACK_SELECT 
+device_track_bank_increment     = "t/device/track/bank/+";               // DEVICE_PREV_TRACK_BANK
+device_track_bank_decrement     = "t/device/track/bank/-";               // DEVICE_NEXT_TRACK_BANK
+device_fx_select 			    = "i/device/fx/select"; 		         // DEVICE_FX_SELECT
+device_fxparam_bank_select      = "i/device/fxparam/bank/select";        // DEVICE_FX_PARAM_BANK_SELECT
+track_bank_select 			    = "i/device/track/bank/select";          // DEVICE_TRACK_BANK_SELECT 
+
+//reaper_track_select_toggle      = "t/track/%d/select/toggle";            // TRACK_SELECT
+reaper_track_mute_toggle 		= "t/track/%d/mute/toggle"; 		     // TRACK_MUTE
+reaper_track_solo_toggle 		= "t/track/%d/solo/toggle"; 		     // TRACK_SOLO
+reaper_track_recarm_toggle 		= "t/track/%d/recarm/toggle"; 		     // TRACK_REC_ARM
+reaper_track_volume 			= "n/track/%d/volume"; 			         // TRACK_VOLUME
+reaper_track_pan 			    = "n/track/%d/pan"; 			         // TRACK_PAN
+// reaper_master_volume 		  = "n/master/volume"; 			           // MASTER_VOLUME
+reaper_action 				    = "i/action"; 				             // ACTION
+reaper_softaction			    = "f/action/%d/cc/soft";		         // ACTION_SOFT
+//reaper_softaction			    = "f/action/%d/cc/relative";		         // ACTION_SOFT now relative
+// reaper_fxparam                 = "f/fxparam/%d/value";                  // FX_PARAM
+reaper_fxparam                  = "f/midimix/knob/%d";                   // Not FX_PARAM at all – rather a generic string to assign using learn
+// Swap comments on previous two lines if the knob is really desired to be used as fxparam rather than a generic knob
+// If wished reaper_fxparam could be extended to being track specific as well giving up to (num of tracks x 72) knobs to assign up to 72 knobs per track! 
+reaper_fx_open_ui  		        = "b/fx/%d/openui"; 		             // FX_OPEN_UI
+// reaper_fx_open_ui_toggle 		= "t/fx/%d/openui/toggle"; 		     // FX_OPEN_UI
+// This fx number specific toggle does not appear to work or be implemented Reaper side : this leads to complication in the implementation: see FX_GUIstate[] array below
+//
+// Reaper's OSC & FX Gui functional behaviour is obtuse - see here for more hints http://forum.cockos.com/showpost.php?p=1588484&postcount=2
+
+
+// ### DEBUG MODE: the poor man's developer tool = log spamming :P 
+// NB: Logging in OSCII-bot may use quite a lot of CPU! Switch off for optimal performance
+// inherited from Banned's code 
+// debug_mode = 1; // (0 = OFF; 1 = ON)
+ 
+// Notional constants
+//
+fader1 = 19; fader2 = 23;  fader3 = 27;  fader4 = 31;  // Midi CC number for the 8 faders and the master fader
+fader5 = 49; fader6 = 53;  fader7 = 57;  fader8 = 61;
+master = 62;					                       // Midi CC number for the master fader
+
+knob1 = 16;  knob2 = 20;  knob3 = 24;   knob4 = 28;    // Midi CC number for the top two rows of knobs    
+knob5 = 46;  knob6 = 50;  knob7 = 54;   knob8 = 58;
+knob9 = 17;  knob10 = 21; knob11 = 25;  knob12 = 29; 
+knob13 = 47; knob14 = 51; knob15 = 55;  knob16 = 59;
+
+knob17 = 18; knob18 = 22; knob19 = 26;  knob20 = 30;   // Midi CC number for the bottom row of knobs 
+knob21 = 48; knob22 = 52; knob23 = 56;  knob24 = 60;
+
+OutChan = 1; 				       	                   // Midi channel 1 is used for outputs : change this if wished different  : script receives on all channels					 
+NoteOn = $x90|(OutChan-1); NoteOff = $x80|(OutChan-1); // Midi standard's event values
+LightOff = $x00 ; LightOn = $x7F ;                     // Midi velocity values to send for MIDIMIX light off and on
+
+BankLeft = $x19 ; BankRight = $x1A;                    // MIDIMIX Bank Right and Left button's notes 
+Solo = $x1B;					                       // and Solo. The remaining buttons are only used once in @midimsg code below (so are not declared here)
+
+//
+// Variables
+//
+midimix_mode = 0;        // 0 = default mode as a mixer 
+                         // 1 = mode as an instrument/FX controller
+
+solo_down = 0;           // Flag - Set to 1 whilst the solo key is being pressed. Used to toggle between midimix_modes in conjunction with bank left or bank right
+
+solo_knob = 0;           // Increment for solo shifted knob number: will have value 72 when solo is pressed to give 72 more virtual knobs
+
+bank_mode = 0;           // State variable - Used in instrument controller mode
+                         // Values are 0 = 1st (notional left) 1 = 2nd (notional middle), 2 = 3rd (notional right) groupings of the top 24 knobs    
+
+FX_GUIstate = 0;         // Lowest address in memory used for array storage 
+					     // Cf. the line "DEVICE_TRACK_COUNT 8" in .ReaperOSC file
+track_bank_size = 8; 			       // we use 8 buttons for controlling the GUI state of 8 tracks at a time
+memset (FX_GUIstate, 0, track_bank_size * 8);  // Declare an array of 64 items to keep hold of the FX GUI state across all the tracks (i.e displayed or not)
+                                               // Forced to use this since toggling UI state in OSC does not seem to work : so have to DIY 
+
+track_bank = 1;           // Used to follow the first track in the selected bank for soft takeover action purposes. Value will be 1 or 9 or 17 etc
+ 
+// debug_mode ? pass = 1; // DEBUG spam - initialise a counter for number of sequential passes through @sections 
+
+function switch_midimix_mode()
+//
+// Lights, or extinguishes the shift right LED and toggles midimix_mode to either Mixer or Instrument
+//
+(  
+    msg1 = NoteOn ; msg2 = BankRight ;  // Set up midi message for LED corresponding to bank right
+    midimix_mode ?
+    (
+       midimix_mode = 0; 
+	   bank_mode = 0;     // Reset bank_mode on entering mixer mode : v1.01b bug fix addition
+       msg3 = LightOff;   // Light off
+       midisend(out);  
+       msg2 = BankLeft;  // and bank left light off too
+       midisend(out);
+    ):
+    (
+       midimix_mode = 1;
+       msg3 = LightOn;   // Light on
+       midisend(out);  
+//      msg2 = BankLeft;   // and bank left light on too
+//      midisend(out);
+    );
+    oscsend(OSC_to_REAPER, reaper_action, 41743); 		// trigger REAPER action "Control surface: refresh all surfaces" (Cmd ID: 41743)
+);
+
+
+function shift_knob_bank_right()
+//
+// In instrument mode lights and extinguishes the shift right/left LED and moves to notional knob bank 1-3
+//
+(   
+    tmp1 = msg1 ; tmp2 = msg2; tmp3 = msg3;  // paranoid code to try preserve midi message regardless of when called 
+    bank_mode == 0 ?
+    (     
+       bank_mode = bank_mode+1; 
+       msg1 = NoteOn ; msg2 = BankLeft ;  // Set up midi message for LED corresponding to bank left 
+       msg3 = LightOn;    // Light on
+       midisend(out);  
+       msg2 = BankRight;  // and bank right light off too
+       msg3 = LightOff;   // Light off
+       midisend(out);
+    ):
+    (
+       bank_mode == 1 ?
+       (
+         bank_mode = bank_mode+1;  
+         msg1 = NoteOn ; msg2 = BankLeft ;  // Set up midi message for LED corresponding to bank left 
+         msg3 = LightOn;    // Light on
+         midisend(out);  
+         msg2 = BankRight;  // and bank right light on too
+         midisend(out);
+       ):
+       (
+          bank_mode == 2 ?
+          (
+            bank_mode = 0;
+            msg1 = NoteOn ; msg2 = BankRight ;  // Set up midi message for LED corresponding to bank right 
+            msg3 = LightOn;   // Light on
+            midisend(out);  
+            msg2 = BankLeft;  // and bank left light off too
+            msg3 = LightOff;  // Light off
+            midisend(out);
+          ); 
+       );  
+    ); 
+    msg1 = tmp1; msg2 = tmp2; msg3 = tmp3; 
+);
+
+
+function shift_knob_bank_left()
+//
+// In instrument mode lights and extinguishes the shift right/left LED and moves to notional knob bank 3-1
+//
+(   
+    tmp1 = msg1 ; tmp2 = msg2; tmp3 = msg3;  // paranoid code to try preserve midi message regardless of when called (would be better popping/pulling from a stack?)
+    bank_mode == 1 ?
+    (     
+       bank_mode = bank_mode-1; 
+       msg1 = NoteOn ; msg2 = BankRight ;  // Set up midi message for LED corresponding to bank right 
+       msg3 = LightOn;    // Light on
+       midisend(out);  
+       msg2 = BankLeft;  // and bank left light off too
+       msg3 = LightOff;   // Light off
+       midisend(out);
+    ):
+    (
+       bank_mode == 0 ?
+       (
+         bank_mode = 2;  
+         msg1 = NoteOn ; msg2 = BankLeft ;  // Set up midi message for LED corresponding to bank left 
+         msg3 = LightOn;    // Light on
+         midisend(out);  
+         msg2 = BankRight;  // and bank right light on too
+         midisend(out);
+       ):
+       (
+          bank_mode == 2 ?
+          (
+            bank_mode = bank_mode-1;
+            msg1 = NoteOn ; msg2 = BankLeft ;  // Set up midi message for LED corresponding to bank right 
+            msg3 = LightOn;   // Light on
+            midisend(out);  
+            msg2 = BankRight;  // and bank right light off too
+            msg3 = LightOff;  // Light off
+            midisend(out);
+          ); 
+       );  
+    ); 
+    msg1 = tmp1; msg2 = tmp2; msg3 = tmp3; 
+);
+
+
+function bank_LEDS_off()
+// 
+// Convenience function to switch both bank LEDs off, since no state is ever sent for these from OSC control surface
+
+(
+   msg1 = NoteOn ; msg2 = BankRight ;  // Set up midi message for LED corresponding to bank right 
+   msg3 = LightOff;                    // Light off
+   midisend(out);  
+   msg2 = BankLeft;  				   // and bank left light off too
+   midisend(out);
+);
+
+function send_soft_fader(fader) local (track_bank_action)
+//
+// Sends action for a soft fader provided track <= 99 else output ordinairy (non soft) fader
+//
+(
+track_bank_action = ((fader + track_bank)*8) + 4;
+track_bank_action <= 804 ? (         // i.e. track 99's action number
+      oscsend(OSC_to_REAPER, reaper_softaction, tmsg3/127, track_bank_action);
+   ): 
+   (
+      oscsend(OSC_to_REAPER, reaper_track_volume, tmsg3/127, fader ); 
+   );
+);
+
+function send_soft_pan(pan) local (track_bank_action)
+//
+// Sends action for a soft track pan provided track <= 99 else output ordinairy (non soft) pan
+//
+(
+track_bank_action = ((pan + track_bank)*8) + 5;
+track_bank_action <= 805 ? (         // i.e. track 99's action number
+      oscsend(OSC_to_REAPER, reaper_softaction, tmsg3/127, track_bank_action);
+   ): 
+   (
+      oscsend(OSC_to_REAPER, reaper_track_pan, tmsg3/127, pan ); 
+   );
+);
+
+// ***** Starting point for actual code in init
+
+bank_LEDS_off();								        // Put the bank	LEDS off at start up (since they may have been left on)
+oscsend(OSC_to_REAPER, track_bank_select, 1);           // initialise with bank 1 selected
+oscsend(OSC_to_REAPER, reaper_action, 41743); 			// trigger REAPER action "Control surface: refresh all surfaces" (Cmd ID: 41743)
+
+
+@midimsg
+// debug_mode? ( printf("\n[DEBUG] @midimsg Pass %f entry time: %f", pass, time_precise() ); ); // DEBUG SPAM
+status = msg1 & $xF0;                     // mask out channel to derive status 
+channel = msg1 & $x0F;                    // mask out status to derive channel (just in case)
+tmsg2 = msg2; tmsg3 = msg3;               // save msg2 & msg3 as temp in case either global variable gets changed in other midi action in the code below
+
+
+status == $x90 ?       // Note on - so there must be a button press
+(
+      // ****** Send 'toggle record arm track' message to OSC Control Surface (TRACK_REC_ARM)	
+      //        Or 'track select' in instrument mode along with a control surface refresh .
+      //         
+      //							
+       tmsg2 == $x03 ?  // Record Arm 1 
+      (
+          midimix_mode == 0 ? oscsend(OSC_to_REAPER, reaper_track_recarm_toggle, 1 ) : 
+          		      ( oscsend(OSC_to_REAPER, device_track_select, 1); oscsend(OSC_to_REAPER, device_fxparam_bank_select ););
+      );
+       tmsg2 == $x06 ?  // Record Arm 2
+      (
+          midimix_mode == 0 ? oscsend(OSC_to_REAPER, reaper_track_recarm_toggle, 2 ) : 
+          		      ( oscsend(OSC_to_REAPER, device_track_select, 2); oscsend(OSC_to_REAPER, device_fxparam_bank_select ););
+      );
+      tmsg2 == $x09 ?   // Record Arm 3 
+      (
+          midimix_mode == 0 ? oscsend(OSC_to_REAPER, reaper_track_recarm_toggle, 3 ) : 
+          		      ( oscsend(OSC_to_REAPER, device_track_select, 3); oscsend(OSC_to_REAPER, device_fxparam_bank_select ););
+      );
+      tmsg2 == $x0C ?   // Record Arm 4 
+      (
+          midimix_mode == 0 ? oscsend(OSC_to_REAPER, reaper_track_recarm_toggle, 4 ) :
+          		      ( oscsend(OSC_to_REAPER, device_track_select, 4); oscsend(OSC_to_REAPER, device_fxparam_bank_select ););
+      );
+      tmsg2 == $x0F ?   // Record Arm 5 
+      (
+          midimix_mode == 0 ? oscsend(OSC_to_REAPER, reaper_track_recarm_toggle, 5 ) :
+          		      ( oscsend(OSC_to_REAPER, device_track_select, 5); oscsend(OSC_to_REAPER, device_fxparam_bank_select ););
+      );
+      tmsg2 == $x12 ?   // Record Arm 6 
+      (
+          midimix_mode == 0 ? oscsend(OSC_to_REAPER, reaper_track_recarm_toggle, 6 ) :
+          		      ( oscsend(OSC_to_REAPER, device_track_select, 6); oscsend(OSC_to_REAPER, device_fxparam_bank_select ););
+      );
+      tmsg2 == $x15 ?   // Record Arm 7 
+      (
+          midimix_mode == 0 ? oscsend(OSC_to_REAPER, reaper_track_recarm_toggle, 7 ) :
+          		      ( oscsend(OSC_to_REAPER, device_track_select, 7); oscsend(OSC_to_REAPER, device_fxparam_bank_select ););
+      );
+      tmsg2 == $x18 ?   // Record Arm 8 
+      (
+          midimix_mode == 0 ? oscsend(OSC_to_REAPER, reaper_track_recarm_toggle, 8 ) :
+          		      ( oscsend(OSC_to_REAPER, device_track_select, 8); oscsend(OSC_to_REAPER, device_fxparam_bank_select ););
+      ); 
+ 
+      // ****** Send 'toggle track mute' message to OSC Control Surface (TRACK_MUTE)
+      //        or open / close FX for FX 1-8 on the track. FX_GUIstate should match and follow the state of the FX GUI windows to 
+      //        select / deselect them
+      //								
+      tmsg2 == $x01 ?  // Mute 1 
+      (
+          midimix_mode == 0 ? oscsend(OSC_to_REAPER, reaper_track_mute_toggle, 1 ) : 
+                              ( oscsend(OSC_to_REAPER, device_fx_select, 1);
+                                offset = (selected_track-1) * track_bank_size ;
+                                oscsend(OSC_to_REAPER, reaper_fx_open_ui, ! FX_GUIstate[offset], 1) );
+      );
+      tmsg2 == $x04 ?  // Mute 2
+      (
+          midimix_mode == 0 ? oscsend(OSC_to_REAPER, reaper_track_mute_toggle, 2 ) :
+                              ( oscsend(OSC_to_REAPER, device_fx_select, 2);
+				offset = ((selected_track-1) * track_bank_size) + 1 ;
+                                oscsend(OSC_to_REAPER, reaper_fx_open_ui, ! FX_GUIstate[offset], 2) );
+      );
+      tmsg2 == $x07 ?   // Mute 3 
+      (
+          midimix_mode == 0 ? oscsend(OSC_to_REAPER, reaper_track_mute_toggle, 3 ) : 
+                              ( oscsend(OSC_to_REAPER, device_fx_select, 3);
+				offset = ((selected_track-1) * track_bank_size) + 2 ;
+                                oscsend(OSC_to_REAPER, reaper_fx_open_ui, ! FX_GUIstate[offset], 3) );
+      );
+      tmsg2 == $x0A ?   // Mute 4 
+      (
+          midimix_mode == 0 ? oscsend(OSC_to_REAPER, reaper_track_mute_toggle, 4 ) : 
+                              ( oscsend(OSC_to_REAPER, device_fx_select, 4);
+				offset = ((selected_track-1) * track_bank_size) + 3 ;
+                                oscsend(OSC_to_REAPER, reaper_fx_open_ui, ! FX_GUIstate[offset], 4) );
+      );
+      tmsg2 == $x0D ?   // Mute 5 
+      (
+          midimix_mode == 0 ? oscsend(OSC_to_REAPER, reaper_track_mute_toggle, 5 ) : 
+                              ( oscsend(OSC_to_REAPER, device_fx_select, 5);
+                                offset = ((selected_track-1) * track_bank_size) + 4 ;
+                                oscsend(OSC_to_REAPER, reaper_fx_open_ui, ! FX_GUIstate[offset], 5) );
+      );
+      tmsg2 == $x10 ?   // Mute 6 
+      (
+          midimix_mode == 0 ? oscsend(OSC_to_REAPER, reaper_track_mute_toggle, 6 ) : 
+                              ( oscsend(OSC_to_REAPER, device_fx_select, 6);
+				offset = ((selected_track-1) * track_bank_size) + 5 ;
+                                oscsend(OSC_to_REAPER, reaper_fx_open_ui, ! FX_GUIstate[offset], 6) );
+      );
+      tmsg2 == $x13 ?   // Mute 7 
+      (
+          midimix_mode == 0 ? oscsend(OSC_to_REAPER, reaper_track_mute_toggle, 7 ) : 
+                              ( oscsend(OSC_to_REAPER, device_fx_select, 7);
+				offset = ((selected_track-1) * track_bank_size) + 6 ;
+                                oscsend(OSC_to_REAPER, reaper_fx_open_ui, ! FX_GUIstate[offset], 7) );
+      );
+      tmsg2 == $x16 ?   // Mute 8 
+      (
+          midimix_mode == 0 ? oscsend(OSC_to_REAPER, reaper_track_mute_toggle, 8 ) : 
+                              ( oscsend(OSC_to_REAPER, device_fx_select, 8);
+				offset = ((selected_track-1) * track_bank_size) + 7 ;
+                                oscsend(OSC_to_REAPER, reaper_fx_open_ui, ! FX_GUIstate[offset], 8) );
+      );  
+
+      // ****** Send 'toggle track solo' message to OSC Control Surface (TRACK_SOLO)
+      //								
+      tmsg2 == $x02 ?  // Solo 1 
+      (
+          midimix_mode == 0 ? oscsend(OSC_to_REAPER, reaper_track_solo_toggle, 1 ); 
+      );
+      tmsg2 == $x05 ?  // Solo 2
+      (
+          midimix_mode == 0 ? oscsend(OSC_to_REAPER, reaper_track_solo_toggle, 2 ); 
+      );
+      tmsg2 == $x08 ?   // Solo 3 
+      (
+          midimix_mode == 0 ? oscsend(OSC_to_REAPER, reaper_track_solo_toggle, 3 ); 
+      );
+      tmsg2 == $x0B ?   // Solo 4 
+      (
+          midimix_mode == 0 ? oscsend(OSC_to_REAPER, reaper_track_solo_toggle, 4 ); 
+      );
+      tmsg2 == $x0E ?   // Solo 5 
+      (
+          midimix_mode == 0 ? oscsend(OSC_to_REAPER, reaper_track_solo_toggle, 5 ); 
+      );
+      tmsg2 == $x11 ?   // Solo 6 
+      (
+          midimix_mode == 0 ? oscsend(OSC_to_REAPER, reaper_track_solo_toggle, 6 ); 
+      );
+      tmsg2 == $x14 ?   // Solo 7 
+      (
+          midimix_mode == 0 ? oscsend(OSC_to_REAPER, reaper_track_solo_toggle, 7 ); 
+      );
+      tmsg2 == $x17 ?   // Solo 8 
+      (
+          midimix_mode == 0 ? oscsend(OSC_to_REAPER, reaper_track_solo_toggle, 8 ); 
+      );  
+
+      tmsg2 == BankRight  ? // Bank Right 
+      ( 
+        solo_down ?   // Either do a Bank Right, or switch midimix mode without any bank right action, or move the instrument knob banks right 
+           ( switch_midimix_mode();
+           ):       
+           ( midimix_mode == 0 ?
+              ( oscsend(OSC_to_REAPER, reaper_action, 40297); 				// trigger REAPER action: "Track: Unselect all tracks"
+                oscsend(OSC_to_REAPER, "t/track/1,2,3,4,5,6,7,8/select/toggle", 1); 	// select all tracks in currently selected bank  (reselects tracks after mixer use) 
+	            oscsend(OSC_to_REAPER, reaper_action, 40359); 				// trigger REAPER action: "Track: Set to default color"
+                oscsend(OSC_to_REAPER, device_track_bank_increment, 1);
+                oscsend(OSC_to_REAPER, reaper_action, 40297); 				// trigger REAPER action: "Track: Unselect all tracks"
+                oscsend(OSC_to_REAPER, "t/track/1,2,3,4,5,6,7,8/select/toggle", 1); 	// select all tracks in currently selected bank  
+                oscsend(OSC_to_REAPER, reaper_action, 40360); 				// trigger REAPER action: "Track: Set to one random color"
+                oscsend(OSC_to_REAPER, reaper_action, 40297); 				// trigger REAPER action: "Track: Unselect all tracks" 
+		    	                                                            // (makes sure tracks are unselected before using mixer
+                oscsend(OSC_to_REAPER, reaper_action, 41070);               // reset soft takeover to make sure it works as wished
+				oscsend(OSC_to_REAPER, reaper_action, 41743); 				// trigger REAPER action "Control surface: refresh all surfaces" (Cmd ID: 41743) 
+	    									                                // makes REAPER send back the states of all mutes, solos and recarms for bank
+              ):	
+              (	 									
+                oscsend(OSC_to_REAPER, reaper_action, 41070);               // reset soft takeover to make sure it works as wished
+				shift_knob_bank_right();
+              );
+            );
+      );
+      tmsg2 == BankLeft  ? // Bank Left
+      (
+        solo_down ?   // Either do a Bank Left, or switch midimix mode without any bank left action, or move the instrument knob banks left 
+           ( switch_midimix_mode();
+           ):
+           ( midimix_mode == 0 ?
+              ( oscsend(OSC_to_REAPER, reaper_action, 40297); 				// trigger REAPER action: "Track: Unselect all tracks"
+                oscsend(OSC_to_REAPER, "t/track/1,2,3,4,5,6,7,8/select/toggle", 1); 	// select all tracks in currently selected bank  (reselects tracks after mixer use) 
+	            oscsend(OSC_to_REAPER, reaper_action, 40359); 				// trigger REAPER action: "Track: Set to default color"
+                oscsend(OSC_to_REAPER, device_track_bank_decrement, 1);
+                oscsend(OSC_to_REAPER, reaper_action, 40297); 				// trigger REAPER action: "Track: Unselect all tracks"
+                oscsend(OSC_to_REAPER, "t/track/1,2,3,4,5,6,7,8/select/toggle", 1); 	// select all tracks in currently selected bank  
+                oscsend(OSC_to_REAPER, reaper_action, 40360); 				// trigger REAPER action: "Track: Set to one random color"
+                oscsend(OSC_to_REAPER, reaper_action, 40297); 				// trigger REAPER action: "Track: Unselect all tracks" 
+											                                // (makes sure tracks are unselected before using mixer
+				oscsend(OSC_to_REAPER, reaper_action, 41070);               // reset soft takeover to make sure it works as wished
+                oscsend(OSC_to_REAPER, reaper_action, 41743); 				// trigger REAPER action "Control surface: refresh all surfaces" (Cmd ID: 41743)	                                                                                        // makes REAPER send back the states of all mutes, solos and recarms for bank
+              ): 
+              (
+                 oscsend(OSC_to_REAPER, reaper_action, 41070);               // reset soft takeover to make sure it works as wished
+				 shift_knob_bank_left();
+              );  
+           );										
+      );
+
+      tmsg2 == Solo ? // Solo 
+      (
+         solo_down = 1;     // Set flag that solo is pressed
+		 solo_knob = 72;    // knobs 73-144 only when solo is pressed
+      );
+);
+
+status == $x80 ?       // Note off - so there must be a button release    
+(
+      tmsg2 == Solo ? // Solo
+      (
+         solo_down = 0;     // Clear flag since solo is released 
+		 solo_knob = 0;     // knobs 1-72 when solo is not pressed
+      );
+);
+
+status  == $xB0 ? // Control Change - so must be a knob or a slider (fader) moving
+(
+//  ***** Map the 8 faders to the track volume using soft takeover 
+//
+
+    tmsg2 == fader1 ?
+    (
+          send_soft_fader(1);
+    );
+    tmsg2 == fader2 ?
+    (
+          send_soft_fader(2);
+    );
+    tmsg2 == fader3 ?
+    (
+          send_soft_fader(3); 
+    );
+    tmsg2 == fader4 ?
+    (
+          send_soft_fader(4);
+    );
+    tmsg2 == fader5 ?
+    (
+          send_soft_fader(5);
+    );
+    tmsg2 == fader6 ?
+    (
+          send_soft_fader(6);
+    );
+    tmsg2 == fader7 ?
+    (
+          send_soft_fader(7);		
+    );
+    tmsg2 == fader8 ?
+    (
+          send_soft_fader(8);
+    );
+
+//  ***** Map the Master fader to the master track volume
+//
+
+    tmsg2 == master ?
+    (
+//        oscsend(OSC_to_REAPER, reaper_master_volume, tmsg3/127 ); 
+        oscsend(OSC_to_REAPER, reaper_softaction, tmsg3/127, 12); // master track volume - action for soft takeover
+    );
+
+//  ***** Map the bottom 8 knobs either to the track pan (with soft takeover) or to instrument knob banks, depending on the MIDIMIX mode
+//
+
+//    tmsg2 == knob17 ?
+//    (
+//        midimix_mode == 0 ? send_soft_pan(1) :
+//                            oscsend(OSC_to_REAPER, reaper_fxparam, tmsg3/127, solo_knob+17+24*bank_mode);
+//    );
+//    tmsg2 == knob18 ?
+//    (
+//        midimix_mode == 0 ? send_soft_pan(2) : 
+//                            oscsend(OSC_to_REAPER, reaper_fxparam, tmsg3/127, solo_knob+18+24*bank_mode);
+//    );
+//    tmsg2 == knob19 ?
+//    (
+//        midimix_mode == 0 ? send_soft_pan(3) :  
+//                            oscsend(OSC_to_REAPER, reaper_fxparam, tmsg3/127, solo_knob+19+24*bank_mode);
+//    );
+//    tmsg2 == knob20 ?
+//    (
+//        midimix_mode == 0 ? send_soft_pan(4) :
+//                            oscsend(OSC_to_REAPER, reaper_fxparam, tmsg3/127, solo_knob+20+24*bank_mode);
+//    );
+//    tmsg2 == knob21 ?
+//    (
+//        midimix_mode == 0 ? send_soft_pan(5) : 
+//                            oscsend(OSC_to_REAPER, reaper_fxparam, tmsg3/127, solo_knob+21+24*bank_mode);
+//    );
+//    tmsg2 == knob22 ?
+//    (
+//        midimix_mode == 0 ? send_soft_pan(6) :
+//                            oscsend(OSC_to_REAPER, reaper_fxparam, tmsg3/127, solo_knob+22+24*bank_mode);    
+//	);
+//    tmsg2 == knob23 ?
+//    (
+//        midimix_mode == 0 ? send_soft_pan(7) : 
+//                            oscsend(OSC_to_REAPER, reaper_fxparam, tmsg3/127, solo_knob+23+24*bank_mode);
+//    );
+//    tmsg2 == knob24 ?
+//    (
+//        midimix_mode == 0 ? send_soft_pan(8) : 
+//                            oscsend(OSC_to_REAPER, reaper_fxparam, tmsg3/127, solo_knob+24+24*bank_mode);
+//    );
+
+//  ***** Map the top 16 knobs to FX_PARAM 1-16 for selected track (or FX_PARAM range for two extra banks) 
+//
+//  This code could have been implemented more compactly in a broader "if" statement for groups of 8 knobs
+//  But the CC jump between left and right side sets of 4 knobs each is a pain, and it just seemed clearer to lay it out explcitly 
+
+    tmsg2 == knob1 ?
+    (
+        oscsend(OSC_to_REAPER, reaper_fxparam, tmsg3/127, solo_knob+1+24*bank_mode); // Send OSC message with value for FX parameter
+    );
+    tmsg2 == knob2 ?
+    (
+        oscsend(OSC_to_REAPER, reaper_fxparam, tmsg3/127, solo_knob+2+24*bank_mode); // Send OSC message with value for FX parameter
+    );
+    tmsg2 == knob3 ?
+    (
+        oscsend(OSC_to_REAPER, reaper_fxparam, tmsg3/127, solo_knob+3+24*bank_mode); // Send OSC message with value for FX parameter
+    );
+    tmsg2 == knob4 ?
+    (
+        oscsend(OSC_to_REAPER, reaper_fxparam, tmsg3/127, solo_knob+4+24*bank_mode); // Send OSC message with value for FX parameter
+    );
+    tmsg2 == knob5 ?
+    (
+        oscsend(OSC_to_REAPER, reaper_fxparam, tmsg3/127, solo_knob+5+24*bank_mode); // Send OSC message with value for FX parameter
+    );    
+    tmsg2 == knob6 ?
+    (
+        oscsend(OSC_to_REAPER, reaper_fxparam, tmsg3/127, solo_knob+6+24*bank_mode); // Send OSC message with value for FX parameter
+    );    
+    tmsg2 == knob7 ?
+    (
+        oscsend(OSC_to_REAPER, reaper_fxparam, tmsg3/127, solo_knob+7+24*bank_mode); // Send OSC message with value for FX parameter
+    );
+    tmsg2 == knob8 ?
+    (
+        oscsend(OSC_to_REAPER, reaper_fxparam, tmsg3/127, solo_knob+8+24*bank_mode); // Send OSC message with value for FX parameter
+    );
+    tmsg2 == knob9 ?
+    (
+        oscsend(OSC_to_REAPER, reaper_fxparam, tmsg3/127, solo_knob+9+24*bank_mode); // Send OSC message with value for FX parameter
+    );
+    tmsg2 == knob10 ?
+    (
+        oscsend(OSC_to_REAPER, reaper_fxparam, tmsg3/127, solo_knob+10+24*bank_mode); // Send OSC message with value for FX parameter
+    );
+    tmsg2 == knob11 ?
+    (
+        oscsend(OSC_to_REAPER, reaper_fxparam, tmsg3/127, solo_knob+11+24*bank_mode); // Send OSC message with value for FX parameter
+    );
+    tmsg2 == knob12 ?
+    (
+        oscsend(OSC_to_REAPER, reaper_fxparam, tmsg3/127, solo_knob+12+24*bank_mode); // Send OSC message with value for FX parameter
+    );
+    tmsg2 == knob13 ?
+    (
+        oscsend(OSC_to_REAPER, reaper_fxparam, tmsg3/127, solo_knob+13+24*bank_mode); // Send OSC message with value for FX parameter
+    );
+    tmsg2 == knob14 ?
+    (
+        oscsend(OSC_to_REAPER, reaper_fxparam, tmsg3/127, solo_knob+14+24*bank_mode); // Send OSC message with value for FX parameter
+    );
+    tmsg2 == knob15 ?
+    (
+        oscsend(OSC_to_REAPER, reaper_fxparam, tmsg3/127, solo_knob+15+24*bank_mode); // Send OSC message with value for FX parameter
+    );
+    tmsg2 == knob16 ?
+    (
+        oscsend(OSC_to_REAPER, reaper_fxparam, tmsg3/127, solo_knob+16+24*bank_mode); // Send OSC message with value for FX parameter
+    );
+    tmsg2 == knob17 ?
+    (
+        oscsend(OSC_to_REAPER, reaper_fxparam, tmsg3/127, solo_knob+17+24*bank_mode); // Send OSC message with value for FX parameter
+    );
+    tmsg2 == knob18 ?
+    (
+        oscsend(OSC_to_REAPER, reaper_fxparam, tmsg3/127, solo_knob+18+24*bank_mode); // Send OSC message with value for FX parameter
+    );
+	msg2 == knob19 ?
+    (
+        oscsend(OSC_to_REAPER, reaper_fxparam, tmsg3/127, solo_knob+19+24*bank_mode); // Send OSC message with value for FX parameter
+    );
+    tmsg2 == knob20 ?
+    (
+        oscsend(OSC_to_REAPER, reaper_fxparam, tmsg3/127, solo_knob+20+24*bank_mode); // Send OSC message with value for FX parameter
+    );
+    tmsg2 == knob21 ?
+    (
+        oscsend(OSC_to_REAPER, reaper_fxparam, tmsg3/127, solo_knob+21+24*bank_mode); // Send OSC message with value for FX parameter
+    );
+    tmsg2 == knob22 ?
+    (
+        oscsend(OSC_to_REAPER, reaper_fxparam, tmsg3/127, solo_knob+22+24*bank_mode); // Send OSC message with value for FX parameter
+    );
+    tmsg2 == knob23 ?
+    (
+        oscsend(OSC_to_REAPER, reaper_fxparam, tmsg3/127, solo_knob+23+24*bank_mode); // Send OSC message with value for FX parameter
+    );
+    tmsg2 == knob24 ?
+    (
+        oscsend(OSC_to_REAPER, reaper_fxparam, tmsg3/127, solo_knob+24+24*bank_mode); // Send OSC message with value for FX parameter
+    );
+
+);
+// debug_mode? ( printf("\n[DEBUG] @midimsg Pass %f exit time:  %f", pass, time_precise() ); pass=pass+1; ); // DEBUG SPAM
+
+
+@oscmsg
+//
+// Track the LED statuses correctly when in mixer mode
+//
+// debug_mode? ( printf("\n[DEBUG] @oscmsg Pass %f entry time: %f", pass, time_precise() ); ); // DEBUG SPAM
+midimix_mode == 0 ?
+(
+  // Receive (OSC) messages for Track 1-8 Rec Arm and set LEDS accordingly
+  //
+  oscmatch("/track/%{track_number}D/recarm/toggle") ? (
+	msg1 = NoteOn ; msg2 = 3 * track_number ;  // Set up midi message for LED corresponding to track
+        oscparm(0,0) == 0 ?         // Rec Arm status is parameter from OSC
+           (
+               msg3 = LightOff;   // Light off
+           ):
+           (
+               msg3 = LightOn;   // Light on
+           );
+        midisend(out);            
+  );   
+
+
+  // Receive (OSC) messages for Track 1-8 Mute and set LEDS accordingly
+  //
+  oscmatch("/track/%{track_number}D/mute/toggle") ? (
+	msg1 = NoteOn ; msg2 = (3 * track_number) - 2 ;  // Set up midi message for LED corresponding to track
+        oscparm(0,0) == 0 ?         // Mute status is parameter from OSC
+           (
+               msg3 = LightOff;   // Light off
+           ):
+           (
+               msg3 = LightOn;   // Light on
+           );
+        midisend(out);  
+
+  );
+
+  // Receive (OSC) messages for Track 1-8 Solo and set LEDS accordingly
+  //
+  oscmatch("/track/%{track_number}D/solo/toggle") ? (
+	msg1 = NoteOn ; msg2 = (3 * track_number) - 1 ;  // Set up midi message for LED corresponding to track
+        oscparm(0,0) == 0 ?         // Solo status is parameter from OSC 
+           (
+               msg3 = LightOff;   // Light off
+           ):
+           (
+               msg3 = LightOn;   // Light on
+           );
+        midisend(out);  
+
+  );
+):
+//
+// Track the LED statuses correctly when in instrument mode
+//
+(
+  // Receive (OSC) messages for Track 1-8 select and set LEDS accordingly to indicate that track is selected
+  //
+  oscmatch("/device/track/select/%{track_number}D") ? (
+	msg1 = NoteOn ; msg2 = 3 * track_number ;  // Set up midi message for LED corresponding to track
+        oscparm(0,0) == 0 ?         // Track select is parameter from OSC (used to light the REC ARM led)
+           (
+               msg3 = LightOff;   // Light off
+//             debug_mode?  printf("\n[DEBUG] oscmatch  Pass %f for %s track_number %f deselected", pass, oscstr, track_number ); // DEBUG SPAM
+           ):
+           (
+               msg3 = LightOn;   // Light on
+               selected_track = track_number;       // Ignore deselected track but capture the track that has been selected for FX use
+//             debug_mode?  printf("\n[DEBUG] oscmatch  Pass %f for %s track_number %f selected", pass, oscstr, track_number ); // DEBUG SPAM
+           );
+        midisend(out); 
+  );  
+
+ 
+
+  // Receive (OSC) messages for FX 1-8 select and set LEDS accordingly
+  // Also capture the state of the FX GUIs so as to be able to toggle GUI state with the "mute" buttons
+  //
+    oscmatch("/fx/%{fx_number}D/openui") ? (                         
+	msg1 = NoteOn ; msg2 = (3 * fx_number) - 2 ;  // Set up midi message for LED corresponding to FX number
+        oscparm(0,0) == 0 ?         // FX GUI displayed is parameter from OSC (used to light the Mute led)
+           (
+               msg3 = LightOff;   // Light off
+               FX_GUIstate[((selected_track-1) * track_bank_size) + fx_number - 1] = 0;
+//             debug_mode?  printf("\n[DEBUG] oscmatch  Pass %f for %s set FX_GUIstate offset %f as 0", pass, oscstr, 
+//                                                 ((selected_track-1) * track_bank_size) + fx_number - 1 ); // DEBUG SPAM  
+           ):
+           (
+               msg3 = LightOn;   // Light on
+               FX_GUIstate[((selected_track-1) * track_bank_size) + fx_number - 1] = 1;
+//             debug_mode?  printf("\n[DEBUG] oscmatch  Pass %f for %s set FX_GUIstate offset %f as 0", pass, oscstr,
+//                                                 ((selected_track-1) * track_bank_size) + fx_number - 1 ); // DEBUG SPAM
+           );
+        midisend(out);
+
+  );
+);
+
+// Capture the OSC string for first track number in the bank when a "bank left" or a "bank right" occurs
+// Need to obtain this for soft takeover to calculate the action number needed for each track's volume and pan
+// Unlike the blocks above in @oscmsg this code block executes in both mixer & instrument modes
+//
+   oscmatch("/track/1/number/str") ? (
+       oscparm(0,0,track_bank_str);               // gets the track bank as a string   
+	   match("%{track_bank}D",track_bank_str);    // convert string to a track number
+//     debug_mode?  printf("\n[DEBUG] track_bank is %d",track_bank);
+);
+// debug_mode? (  printf("\n[DEBUG] @oscmsg Pass %f exit time:  %f", pass, time_precise() );pass=pass+1; ); // DEBUG SPAM
