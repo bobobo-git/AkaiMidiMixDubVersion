@@ -28,7 +28,9 @@ As it's in in the effects-folder of the project it will be loaded with the proje
 
 [The Projects as Zip-File](20201003_DubSessionDeDeRe.zip) contains effects and audiodata (right click save as) 
 
-And untested [here a GUI addon](!MMX_HUD_DS_bobobo.lua) to show the knob assignment, based on [Darkstar's Enhanced HeadUpDisplay (Beta)](https://forum.cockos.com/showthread.php?t=233952). 
+And untested [here a GUI addon](!MMX_HUD_DS_bobobo.lua) to show the knob assignment  
+![](!MMX_HUD_DS_bobobo.png)  
+based on [Darkstar's Enhanced HeadUpDisplay (Beta)](https://forum.cockos.com/showthread.php?t=233952). 
 
 
 some screenshots showing preferences and parameters and stuff
