@@ -27,11 +27,11 @@ I made a JSFX (a variation of the 8 channel stereo Mixer from iX) to control the
 As it's in in the effects-folder of the project it will be loaded with the project  
 
 [The Projects as Zip-File](20201003_DubSessionDeDeRe.zip) contains effects and audiodata (right click save as) 
-
+<font size=25%>
 And very untested [here a GUI addon](!MMX_HUD_DS_bobobo.lua) to show the knob assignment  
 ![](!MMX_HUD_DS_bobobo.png)  
 based on [Darkstar's Enhanced HeadUpDisplay (Beta)](https://forum.cockos.com/showthread.php?t=233952). 
-
+</font>
 
 some screenshots showing preferences and parameters and stuff
 
