@@ -13,9 +13,6 @@
    * Version: 1.0
 
    * Licence: GPL v3
-   *
-   * bobobo Version
-   * some changes for the 3 knob row in Mixer for
 --]]
 
 --[[ Operation:
@@ -112,7 +109,7 @@ function init ()
 
         if     ROW_TYPE[i] == "B"  then GUI_H = GUI_H + 00 + BOX_H +20
         elseif ROW_TYPE[i] == "F"  then GUI_H = GUI_H + 20 + FADER_H + 60
-        elseif ROW_TYPE[i] == "K"  then GUI_H = GUI_H + 20 + KNOB_W *2 +150
+        elseif ROW_TYPE[i] == "K"  then GUI_H = GUI_H + 20 + KNOB_W *2 +50
         elseif ROW_TYPE[i] == "P"  then GUI_H = GUI_H + 20 + KNOB_W *2 +50
         elseif ROW_TYPE[i] == "S"  then GUI_H = GUI_H + 20 + BTN_H +50
         end
@@ -197,9 +194,8 @@ function display_help (PPage)
             "\nand operates in either the Mixer or the Instrument modes. " ..
             "It relies on the use of \ngoldenarpharazon's MIDIMix Control Surface, available here: " ..
             "https://forum.cockos.com/showthread.php?t=172908 ." ..
-            "\nVersion bobobo's changes 21 assingable knobs"..
-            "\n*  In Mixer mode, there are 3 rows of knobs assignable to plug-in parameters and a bank of 8 tracks, " ..
-            "\n      with Mute/Solo, RecArm and Level controls." ..
+            "\n\n*  In Mixer mode, there are two rows of knobs assignable to plug-in parameters and a bank of 8 tracks, " ..
+            "\n      with Pan, Mute/Solo, RecArm and Level controls." ..
             "\n*  In Instrument mode, there are three rows of knobs assignable to plug-in parameters and a bank of 8 tracks, " ..
             "\n      with Level controls; the buttons indicate which FX on the selected track are open and which track in the bank is selected." 
         )
@@ -799,6 +795,7 @@ local LX0, LY0, LX, LY, LW, LH, LXGAP, LYGAP, LXMID, Lfactor,
     if op_mode     == MIXER then Lsets = 6
     elseif op_mode == INSTR then Lsets = 6
     end
+    
     for Lcolumn = 1, Lsets do
         set_colour(GREY_7)
         gfx.lineto(gfx.x+LBankW, gfx.y)
@@ -807,15 +804,9 @@ local LX0, LY0, LX, LY, LW, LH, LXGAP, LYGAP, LXMID, Lfactor,
         gfx.lineto(gfx.x, gfx.y-20)
 
         set_colour(GREY_7);  gfx.a = 0.75
-        if op_mode == MIXER then
             if sel_bank == Lcolumn then              set_colour(DEEP_OR); gfx.a = 0.75
             elseif used_banks[Lcolumn] == YES then   set_colour(YELLOW);  gfx.a = 0.80
             end
-        else
-            if sel_bank == Lcolumn then              set_colour(DEEP_OR); gfx.a = 0.75
-            elseif used_banks[Lcolumn] == YES then   set_colour(YELLOW);  gfx.a = 0.80
-            end
-        end
 
 
         gfx.rect(gfx.x +2, gfx.y +2, LBankW -3, 20 -3)
@@ -892,7 +883,7 @@ local LX0, LY0, LX, LY, LW, LH, LXGAP, LYGAP, LXMID, Lfactor,
     if mode_clicked == 1 and click_stage == 2 then
         set_colour(ORANGE); gfx.a = 0.75
     elseif op_mode == MIXER then 
-                set_colour(GREEN); gfx.a = 0.95
+        set_colour(VIOLET); gfx.a = 0.95
     elseif op_mode == INSTR then 
         set_colour(GREEN); gfx.a = 0.95
     else
@@ -1327,7 +1318,7 @@ if op_mode == MIXER and sel_bank == 2 then sel_bank = 4 end
     if op_mode ~= SYNTH then
         gfx.x = 8; 
         if op_mode == MIXER then 
-                        Lmixer_Y0 = MIXER_Y0 + 245
+            Lmixer_Y0 = MIXER_Y0 + 245
         else -- op_mode == INSTR
             Lmixer_Y0 = MIXER_Y0 + 245
         end
@@ -1526,7 +1517,7 @@ local  Lheight, Lborder_Y1
     Lnumtracks = reaper.GetNumTracks()
     Lcols = math.min(COLUMNS,Lnumtracks - Pfirst_track +1)
     for column = 1, Lcols do
-        if op_mode == MIXER then     display_instr_track(Pfirst_track, column)
+        if op_mode == MIXER then     display_mixer_track(Pfirst_track, column)
         elseif op_mode == INSTR then display_instr_track(Pfirst_track, column)
         end
     end
@@ -1632,7 +1623,7 @@ local Lrow, Lcolumn, kidx, pidx, Ltridx, Lcols,
         or Lpan    ~= track_states[pidx + 4] then
 --]]--
             if op_mode == MIXER then 
-                display_instr_track(first_mixer_track, Lcolumn)
+                display_mixer_track(first_mixer_track, Lcolumn)
             else
                 display_instr_track(first_mixer_track, Lcolumn)
             end
@@ -1680,7 +1671,7 @@ end -- of function
 -- -------------------------------------------------------
 function display_mixer_track (Pfirst_track, Pcolumn)
 -- -------------------------------------------------------
-local  LX0, LY0, LX, LY, LW, LH, LXGAP, LYGAP, LXMID, Lfactor, Lmixer_Y0, Ldelta_panY,
+local  LX0, LY0, LX, LY, LW, LH, LXGAP, LYGAP, LXMID, Lfactor, Ldelta_panY,
        Ltrack, Lvolume, Lpan, Ltr_name, Lmute, Lsolo, Lrecarm,
        Lnumtracks, Lr, Lg, Lb, LpanX, Lcols, Lcolumn,
        Lseltrack, Lfx_count, Ltridx, LtracknumberFX, LselectFX, Lparamnumber,
@@ -1691,129 +1682,122 @@ local  LX0, LY0, LX, LY, LW, LH, LXGAP, LYGAP, LXMID, Lfactor, Lmixer_Y0, Ldelta
     Lfactor = 2
     Ltridx = Pfirst_track - 1 + Pcolumn -1
 
--- .... get the track data 
-    Ltrack           = reaper.GetTrack(0,Ltridx)
+-- .... get the track data
+    Ltrack = reaper.GetTrack(0,Ltridx)
     _, Lvolume, Lpan = reaper.GetTrackUIVolPan(Ltrack)
-    _, Ltr_name      = reaper.GetTrackName(Ltrack, " ")
-    _, Lmute         = reaper.GetTrackUIMute(Ltrack)
-    Lsolo            = reaper.GetMediaTrackInfo_Value(Ltrack, "I_SOLO")
-    Lrecarm          = reaper.GetMediaTrackInfo_Value(Ltrack, "I_RECARM")
+    _, Ltr_name = reaper.GetTrackName(Ltrack, " ")
+    _, Lmute = reaper.GetTrackUIMute(Ltrack)
+    Lsolo = reaper.GetMediaTrackInfo_Value(Ltrack, "I_SOLO")
+    Lrecarm = reaper.GetMediaTrackInfo_Value(Ltrack, "I_RECARM")
+      
+    Lseltrack = reaper.GetLastTouchedTrack()
+    Ltracknumber = reaper.GetMediaTrackInfo_Value(Lseltrack, "IP_TRACKNUMBER")
+    _, LtracknumberFX, LselectFX, Lparamnumber = reaper.GetLastTouchedFX()
+
 -- ..................................
     pidx = (Pcolumn-1) * TRACK_ELEMENTS +1
     LX, LY = position_the_control(ROWS *COLUMNS * sel_bank + Pcolumn -1)
--- NB 
-LY =370
-    LX = LX - KNOB_W/2
-    LY = LY + 20
 
+-- 0401 +
+LY = 530
+
+    LX = LX - KNOB_W/2
+    LY = LY +20
+    Ldelta_panY = 0
+
+------------------------------------------
+-- .... the Solo / Mute button (used for FX GUI opened in INSTR mde)
+
+    set_colour(GREY_3); gfx.a = 1.00
+    gfx.x = LX+1; gfx.y = LY + Ldelta_panY +30 -20-5-- gfx.y +30
+
+    if reaper.TrackFX_GetOpen(Lseltrack, Pcolumn-1) then
+        draw_button(ORANGE, 0.80, BLACK,  1.00, "FX")
+    else
+        draw_button(GREY_6, 0.70, BLACK,  1.00, "  ") 
+    end
+    gfx.a = 1.00
+
+-- .... display FX names of FX on selected track here, clear first
+    set_colour (BG);  gfx.rect(LX - KNOB_W, LY +24, KNOB_W *3,15)
+
+    set_colour(GREY_7)
+    Lfx_count = reaper.TrackFX_GetCount(Lseltrack)
+    if Pcolumn <= Lfx_count then 
+        gfx.x = LX+1; gfx.y = gfx.y +14+6;
+        local _, fx_name = reaper.TrackFX_GetFXName(Lseltrack, Pcolumn -1, "");
+        local fx_name2 = fx_name:match(" (.*) %(")
+        if fx_name2 == nil then fx_name2 = fx_name:match("/(.*)", -20) end
+-- ALT WIP gfx.a =1.00; set_instance_colour (LselectT, Pcolumn-1)
+        print_central(gfx.x + KNOB_W/2, string.sub(fx_name2, 1,18))
+        gfx.y = gfx.y -14-6
+    end
+
+------------------------------------------
+-- .... the RecArm button (used for track select in INSTR mode)
+
+    set_colour(GREY_3)
+    gfx.x = LX+1+1; gfx.y = LY + Ldelta_panY +30-20 +40 --gfx.y +35+15
+    gfx.a = 0.70
+    if Pcolumn == (Ltracknumber - Pfirst_track +1) then
+        draw_button(RED,    0.70, GREY_7, 1.00, "Track")
+    else
+        draw_button(GREY_6, 0.70, GREY_7, 1.00, "   ")
+    end
+    gfx.a = 1.00
+
+-------------------------------------------- 
 -- .... get the track colour, if any
     if reaper.GetTrackColor(Ltrack) > 0 then
         Lr,Lg,Lb = reaper.ColorFromNative(reaper.GetTrackColor(Ltrack))
+        gfx.r = Lr/256;   gfx.g = Lg/256;  gfx.b = Lb/256
     else
        set_colour(GREY_7)
        Lr = gfx.r *256; Lg = gfx.g *256; Lb = gfx.b *256
     end
-
--- .... clear the buffer (WIP)
-    set_colour(BG); gfx.a =1.00
-    gfx.rect(LX -KNOB_W, LY+20, KNOB_W *3, 5) 
+ 
+    LY = LY +100-15
 
 -- .... display the track name
     set_colour(GREY_3)
     gfx.rect(LX -KNOB_W, LY, KNOB_W *3, 20) 
+
     gfx.r = Lr/256;   gfx.g = Lg/256;  gfx.b = Lb/256
     if is_dark_colour() then set_colour(ORANGE) end
+    
     gfx.x = LX +KNOB_W/2; gfx.y = LY +2-- KNOB_W *2 +46;
     print_central(LX + KNOB_W/2, string.sub(Ltr_name,1,LINE_W))
-    Ldelta_panY = KNOB_W *3
 
-
-------------------------------------------
--- .... draw the pan knob
-ZZ_PAN = "NEW"
-    if Lpan ~= track_states[pidx + 4] then 
-        set_colour(GREY_3)
-        gfx.rect(LX -KNOB_W, LY + 25, KNOB_W *3, KNOB_W *3) 
-        gfx.r = Lr/256;   gfx.g = Lg/256;  gfx.b = Lb/256
-        if is_dark_colour() then set_colour(ORANGE) end
-        gfx.x = LX +KNOB_W/2; gfx.y = LY + KNOB_W + 25 +10
-        draw_knob21 (KNOB_W,  Lpan/2 +0.50, 2, 4) -- Pradius, Protator, Palign (centre), Poptions
- 
-        if show_formatted == YES then 
-            if Lpan == 0 then    LpanX = "Centre"
-            elseif Lpan > 0 then LpanX = string.format("%2.0f%% R", Lpan * 100)
-            else                 LpanX = string.format("%2.0f%% L", Lpan * 100)
-            end
-            gfx.x = LX + KNOB_W/2 - string.len(LpanX) /2 * CHAR_W; 
-            set_colour(WHITE); gfx.a = 0.75
-            gfx.printf("%s", LpanX)
-            gfx.a = 1.00
-        end
-        set_colour(GREY_7)
-        gfx.y = gfx.y +12
-        print_central(LX + KNOB_W/2, "Pan")
-    else
-        ZZ_PAN = "same" 
-    end
-
--- .... the Solo / Mute button (used for FX select in INSTR mde)
-ZZ_SM ="NEW"
-    if Lmute ~= track_states[pidx + 0] 
-    or Lsolo ~= track_states[pidx + 1] then 
-        set_colour(GREY_3)
-        gfx.x = LX+1; gfx.y = LY + Ldelta_panY +30-- gfx.y +30
-        gfx.rect(LX -KNOB_W, gfx.y -5, KNOB_W *3, KNOB_W) 
-
-        if Lsolo  ~=0 then          draw_button(ORANGE, 0.80, BLACK,  1.00, "Solo")
-        elseif Lmute == true then   draw_button(RED,    0.70, GREY_7, 1.00, "Mute")
-        else                        draw_button(GREY_6, 0.70, BLACK,  1.00, " ")
-        end
-    else
-        ZZ_SM = "SAME"
-    end
-
-ZZ_REC = "NEW"
--- .... the RecArm button (used for track select in INSTR mode)
-    if Lrecarm ~= track_states[pidx + 2] then
-        set_colour(GREY_3)
-        gfx.rect(LX -KNOB_W, LY + Ldelta_panY +30 +40 -10, KNOB_W *3, KNOB_W +10)
-        gfx.x = LX+1+1; gfx.y = LY + Ldelta_panY +30 +40 --gfx.y +35+15
-        gfx.a = 0.70
-
-        if Lrecarm  ~=0 then draw_button(RED,    0.70, GREY_7, 1.00, "Rec")
-        else                 draw_button(GREY_6, 0.70, GREY_7, 1.00, "   ")
-        end
-    else
-        ZZ_REC = "SAME RA"
-    end
 
 ZZ_VOL ="NEW"
--- .... the Volume fader
+-- .... the track Volume fader
+
     if Lvolume ~= track_states[pidx + 3] then
         set_colour(GREY_3)
-        gfx.rect(LX -KNOB_W, LY + Ldelta_panY +30 +40 +30, KNOB_W *3, FADER_H + 30) 
+        gfx.rect(LX -KNOB_W, LY + Ldelta_panY +25-7+15-6, KNOB_W *3, 187-3-2 -40) 
+
+        gfx.x = LX;  gfx.y = LY + Ldelta_panY +20-7+15-6 --gfx.y +30
         gfx.r = Lr/256;   gfx.g = Lg/256;  gfx.b = Lb/256
-        gfx.x = LX;  gfx.y = LY + Ldelta_panY +30 +40 +30 --gfx.y +30
-        gfx.r = Lr/256;   gfx.g = Lg/256;  gfx.b = Lb/256
-        draw_slider23(Lvolume, FADER_H +12)
+        draw_slider23(Lvolume, FADER_H - 50)
 
 -- .... the signed formatted value
-        set_colour(BG)
-        gfx.rect(LX -KNOB_W, gfx.y, KNOB_W *3, 15)
-        if show_formatted == YES then 
-            Ldb = 20 * math.log(Lvolume /1, 10)
-            if Ldb > 0 then
-                set_colour(ORANGE);  gfx.a = 0.75
-                print_central(LX + KNOB_W/2, string.format("+%4.2f dB", Ldb))
-            else
-                set_colour(WHITE);  gfx.a = 0.75
-                print_central(LX + KNOB_W/2, string.format("%4.2f dB", Ldb))    
-            end
-        end
+    set_colour(BG)
+    gfx.rect(LX -KNOB_W, gfx.y, KNOB_W *3, 15) 
 
-    else
-        ZZ_VOL = "SAME V"
+    if show_formatted == YES then 
+        Ldb = 20 * math.log(Lvolume /1, 10)
+        if Ldb > 0 then
+            set_colour(ORANGE);  gfx.a = 0.75
+            print_central(LX + KNOB_W/2, string.format("+%4.2f dB", Ldb))
+        else
+            set_colour(WHITE);  gfx.a = 0.75
+            print_central(LX + KNOB_W/2, string.format("%4.2f dB", Ldb))    
+        end
     end
+
+else
+ZZ_VOL = "SAME V"
+end
     gfx.a = 1.00
 
 end -- of function
@@ -1970,12 +1954,12 @@ local  LX0, LY0, LX, LY, LW, LH, LXGAP, LYGAP, LXMID, Lfactor, Lmixer_Y0, Lheigh
     LX, LY = position_the_control(ROWS *COLUMNS  * sel_bank + 8-1)
 
 -- 0401 +
---if op_mode == MIXER then LY =370 else LY = 530 end
-LY=530
+if op_mode == MIXER then LY = 530 else LY = 530 end
+
     LX = LX + STEP_X - KNOB_W/2
     LY = LY + 20
 
-    if op_mode == MIXER then Lheight = FADER_H + 55 -20
+    if op_mode == MIXER then Lheight = FADER_H + 55- 20
     else -- op_mode == INSTR
                              Lheight = FADER_H + 55 -20
     end
